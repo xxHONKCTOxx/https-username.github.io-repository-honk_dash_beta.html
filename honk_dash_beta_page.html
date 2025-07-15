@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Honk Dash - Beta</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.2/p5.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; touch-action: none; }
+    #gameCanvas { display: none; }
+    #landingPage { min-height: 100vh; }
+    canvas { touch-action: none; }
+    input, button { -webkit-appearance: none; appearance: none; }
+  </style>
+</head>
+<body class="bg-blue-200 flex items-center justify-center">
+  <div id="landingPage" class="text-center p-6 max-w-md mx-auto">
+    <h1 class="text-4xl font-bold text-gray-800 mb-4">Honk Dash by HONKCTO</h1>
+    <p class="text-lg text-gray-600 mb-6">Guide Honk the goose through gaps between Bonk's baseball bats! Tap to flap, avoid collisions, and aim for a high score. The game gets challenging every 10 obstacles.</p>
+    <div class="mb-6">
+      <h2 class="text-xl font-semibold text-gray-800 mb-2">How to Play:</h2>
+      <ul class="text-gray-600 list-disc list-inside">
+        <li>Tap or press <strong>SPACE</strong> to start the game.</li>
+        <li>Tap or press <strong>SPACE</strong> to flap the goose.</li>
+        <li>Avoid hitting the baseball bats or screen edges.</li>
+        <li>Score points by passing obstacles.</li>
+        <li>In the Game Over screen, tap or press <strong>SPACE</strong> to submit a high score, or swipe up or press <strong>ENTER</strong> to restart.</li>
+      </ul>
+    </div>
+    <button id="playButton" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Play Now</button>
+  </div>
+  <div id="gameCanvas" class="flex justify-center items-center min-h-screen">
+    <script>
+      let goose;
+      let obstacles = [];
+      let score = 0;
+      let gameState = 'start';
+      let nameInput = null;
+      let submitButton = null;
+      let canSubmitHighScore = false;
+      let obstaclesPassed = 0;
+      let canvasWidth, canvasHeight;
+      let touchStartY = 0;
+      let clouds = [];
+      let trees = [];
+      let grassBlades = [];
+
+      function preload() {
+        // backgroundImage = loadImage('background.jpg'); // Commented out
+      }
+
+      function setup() {
+        canvasWidth = min(windowWidth, 600);
+        canvasHeight = min(windowHeight, 800);
+        let canvas = createCanvas(canvasWidth, canvasHeight);
+        canvas.parent('gameCanvas');
+        goose = new Goose();
+        obstacles.push(new Obstacle());
+        // Initialize clouds
+        for (let i = 0; i < 5; i++) {
+          clouds.push({
+            x: random(0, canvasWidth),
+            y: random(50, canvasHeight / 3),
+            size: random(30, 60) * canvasWidth / 600,
+            speed: random(0.2, 0.5) * canvasWidth / 600
+          });
+        }
+        // Initialize trees
+        for (let i = 0; i < 3; i++) {
+          trees.push({
+            x: random(0, canvasWidth),
+            y: canvasHeight - 30 * canvasWidth / 600,
+            size: random(40, 60) * canvasWidth / 600,
+            speed: 0.5 * canvasWidth / 600
+          });
+        }
+        // Initialize grass blades
+        for (let i = 0; i < 20; i++) {
+          grassBlades.push({
+            x: random(0, canvasWidth),
+            y: canvasHeight - 10 * canvasWidth / 600,
+            height: random(10, 20) * canvasWidth / 600,
+            speed: 0.5 * canvasWidth / 600
+          });
+        }
+        console.log('Setup complete, canvas initialized');
+      }
+
+      function windowResized() {
+        canvasWidth = min(windowWidth, 600);
+        canvasHeight = min(windowHeight, 800);
+        resizeCanvas(canvasWidth, canvasHeight);
+        if (nameInput) {
+          nameInput.position(canvasWidth / 2 - 50, canvasHeight / 2 - 8);
+          submitButton.position(canvasWidth / 2 - 25, canvasHeight / 2 + 30);
+        }
+      }
+
+      function drawClouds() {
+        fill(255); // White clouds
+        noStroke();
+        for (let cloud of clouds) {
+          ellipse(cloud.x, cloud.y, cloud.size, cloud.size * 0.7);
+          ellipse(cloud.x + cloud.size * 0.5, cloud.y - cloud.size * 0.2, cloud.size * 0.8, cloud.size * 0.6);
+          ellipse(cloud.x - cloud.size * 0.5, cloud.y + cloud.size * 0.1, cloud.size * 0.8, cloud.size * 0.6);
+          cloud.x -= cloud.speed;
+          if (cloud.x < -cloud.size) {
+            cloud.x = canvasWidth + cloud.size;
+            cloud.y = random(50, canvasHeight / 3);
+            cloud.size = random(30, 60) * canvasWidth / 600;
+            cloud.speed = random(0.2, 0.5) * canvasWidth / 600;
+          }
+        }
+      }
+
+      function drawGround() {
+        // Draw ground
+        fill(139, 69, 19); // Brown ground
+        rect(0, canvasHeight - 30 * canvasWidth / 600, canvasWidth, 30 * canvasWidth / 600);
+        // Draw trees
+        for (let tree of trees) {
+          fill(139, 69, 19); // Brown trunk
+          rect(tree.x - 5 * canvasWidth / 600, tree.y - tree.size * 0.5, 10 * canvasWidth / 600, tree.size * 0.5);
+          fill(34, 139, 34); // Green foliage
+          triangle(
+            tree.x, tree.y - tree.size * 0.5,
+            tree.x - tree.size * 0.5, tree.y + tree.size * 0.5,
+            tree.x + tree.size * 0.5, tree.y + tree.size * 0.5
+          );
+          tree.x -= tree.speed;
+          if (tree.x < -tree.size) {
+            tree.x = canvasWidth + tree.size;
+            tree.y = canvasHeight - 30 * canvasWidth / 600;
+            tree.size = random(40, 60) * canvasWidth / 600;
+            tree.speed = 0.5 * canvasWidth / 600;
+          }
+        }
+        // Draw grass
+        fill(50, 205, 50); // Green grass
+        for (let grass of grassBlades) {
+          triangle(
+            grass.x, grass.y,
+            grass.x - 2 * canvasWidth / 600, grass.y - grass.height,
+            grass.x + 2 * canvasWidth / 600, grass.y - grass.height
+          );
+          grass.x -= grass.speed;
+          if (grass.x < 0) {
+            grass.x = canvasWidth;
+            grass.y = canvasHeight - 10 * canvasWidth / 600;
+            grass.height = random(10, 20) * canvasWidth / 600;
+            grass.speed = 0.5 * canvasWidth / 600;
+          }
+        }
+      }
+
+      function draw() {
+        if (gameState === 'start') {
+          background(135, 206, 235);
+          drawClouds();
+          drawGround();
+          textSize(32 * canvasWidth / 600);
+          textAlign(CENTER);
+          fill(0);
+          text('Honk Dash', canvasWidth / 2, canvasHeight / 2 - 20);
+          textSize(20 * canvasWidth / 600);
+          text('Tap or press SPACE to start', canvasWidth / 2, canvasHeight / 2 + 20);
+          displayHighScores(canvasWidth - 150 * canvasWidth / 600, 50 * canvasWidth / 600);
+        } else if (gameState === 'playing') {
+          background(135, 206, 235);
+          drawClouds();
+          drawGround();
+          goose.update();
+          goose.show();
+          
+          if (frameCount % 150 === 0) {
+            obstacles.push(new Obstacle());
+          }
+          
+          let collision = false;
+          for (let ob of obstacles) {
+            ob.update();
+            ob.show();
+            if (ob.hits(goose)) {
+              collision = true;
+            }
+          }
+          
+          if (collision || goose.y <= 0 || goose.y >= canvasHeight - goose.size - 30 * canvasWidth / 600) {
+            canSubmitHighScore = isHighScore(score);
+            gameState = 'gameover';
+            console.log('Game over, score:', score);
+          } else {
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+              let ob = obstacles[i];
+              if (goose.x > ob.x + ob.width && !ob.passed) {
+                ob.passed = true;
+                obstaclesPassed++;
+                score += 1;
+              }
+              if (ob.x < -ob.width) {
+                obstacles.splice(i, 1);
+              }
+            }
+          }
+          
+          textSize(24 * canvasWidth / 600);
+          fill(0);
+          textAlign(LEFT);
+          text('Score: ' + score, 10 * canvasWidth / 600, 30 * canvasWidth / 600);
+        } else if (gameState === 'enterName') {
+          background(135, 206, 235);
+          if (!nameInput) {
+            nameInput = createInput();
+            nameInput.position(canvasWidth / 2 - 50, canvasHeight / 2 - 8);
+            nameInput.style('font-size', '16px');
+            nameInput.style('padding', '8px');
+            nameInput.elt.focus();
+            submitButton = createButton('Submit');
+            submitButton.position(canvasWidth / 2 - 25, canvasHeight / 2 + 30);
+            submitButton.style('font-size', '16px');
+            submitButton.style('padding', '8px 16px');
+            submitButton.mousePressed(submitName);
+            console.log('Enter name screen displayed');
+          }
+          textSize(24 * canvasWidth / 600);
+          textAlign(CENTER);
+          fill(0);
+          text('New High Score!', canvasWidth / 2, canvasHeight / 2 - 40);
+          text('Enter your name:', canvasWidth / 2, canvasHeight / 2 - 10);
+          text('Score: ' + score, canvasWidth / 2, canvasHeight / 2 + 60);
+        } else if (gameState === 'gameover') {
+          background(135, 206, 235);
+          textSize(32 * canvasWidth / 600);
+          textAlign(CENTER);
+          fill(0);
+          text('Game Over!', canvasWidth / 2, canvasHeight / 2 - 20);
+          text('Score: ' + score, canvasWidth / 2, canvasHeight / 2 + 20);
+          textSize(20 * canvasWidth / 600);
+          text('Swipe up or press ENTER to restart', canvasWidth / 2, canvasHeight / 2 + 60);
+          displayHighScores(canvasWidth - 150 * canvasWidth / 600, 50 * canvasWidth / 600);
+          if (canSubmitHighScore) {
+            textSize(16 * canvasWidth / 600);
+            text('New High Score! Tap or press SPACE to submit your name.', canvasWidth / 2, canvasHeight / 2 + 90);
+          }
+        }
+      }
+
+      function touchStarted() {
+        console.log('Touch started, gameState:', gameState);
+        if (gameState === 'start') {
+          gameState = 'playing';
+          console.log('Game started via touch');
+        } else if (gameState === 'playing') {
+          goose.flap();
+        } else if (gameState === 'gameover' && canSubmitHighScore) {
+          gameState = 'enterName';
+          console.log('Transition to enterName via touch');
+        }
+        touchStartY = mouseY;
+        return false;
+      }
+
+      function touchMoved() {
+        if (gameState === 'gameover') {
+          if (mouseY - touchStartY < -50) { // Swipe up
+            canSubmitHighScore = false;
+            goose = new Goose();
+            obstacles = [];
+            score = 0;
+            obstaclesPassed = 0;
+            gameState = 'start';
+            console.log('Game restarted via swipe');
+          }
+        }
+        return false;
+      }
+
+      function keyPressed() {
+        console.log('Key pressed:', key, 'gameState:', gameState);
+        if (key === ' ' && gameState === 'start') {
+          gameState = 'playing';
+          console.log('Game started via SPACE key');
+        } else if (key === ' ' && gameState === 'playing') {
+          goose.flap();
+        } else if (keyCode === ENTER && gameState === 'gameover') {
+          canSubmitHighScore = false;
+          goose = new Goose();
+          obstacles = [];
+          score = 0;
+          obstaclesPassed = 0;
+          gameState = 'start';
+          console.log('Game restarted via ENTER key');
+        } else if (key === ' ' && gameState === 'gameover' && canSubmitHighScore) {
+          gameState = 'enterName';
+          console.log('Transition to enterName via SPACE key');
+        } else if (keyCode === ENTER && gameState === 'enterName') {
+          submitName();
+          console.log('Name submitted via ENTER key');
+        }
+      }
+
+      class Goose {
+        constructor() {
+          this.y = canvasHeight / 2;
+          this.x = canvasWidth / 4;
+          this.velocity = 0;
+          this.gravity = 0.6 * canvasHeight / 800;
+          this.lift = -8 * canvasHeight / 800;
+          this.size = 30 * canvasWidth / 600;
+          this.wingAngle = 0;
+        }
+        
+        update() {
+          this.velocity += this.gravity;
+          this.y += this.velocity;
+          
+          if (this.y > canvasHeight - this.size - 30 * canvasWidth / 600) {
+            this.y = canvasHeight - this.size - 30 * canvasWidth / 600;
+            this.velocity = 0;
+          }
+          if (this.y < 0) {
+            this.y = 0;
+            this.velocity = 0;
+          }
+          
+          if (this.wingAngle > 0) {
+            this.wingAngle -= 0.1;
+            if (this.wingAngle < 0) this.wingAngle = 0;
+          }
+        }
+        
+        show() {
+          fill(255);
+          ellipse(this.x, this.y, this.size, this.size * 0.8);
+          
+          push();
+          translate(this.x - 15 * canvasWidth / 600, this.y);
+          rotate(-this.wingAngle);
+          ellipse(10 * canvasWidth / 600, 0, 20 * canvasWidth / 600, 10 * canvasWidth / 600);
+          pop();
+          
+          push();
+          translate(this.x + 15 * canvasWidth / 600, this.y);
+          rotate(this.wingAngle);
+          ellipse(-10 * canvasWidth / 600, 0, 20 * canvasWidth / 600, 10 * canvasWidth / 600);
+          pop();
+          
+          stroke(255);
+          strokeWeight(4 * canvasWidth / 600);
+          line(this.x, this.y - 10 * canvasWidth / 600, this.x, this.y - 25 * canvasWidth / 600);
+          noStroke();
+          strokeWeight(1);
+          
+          fill(255);
+          ellipse(this.x, this.y - 25 * canvasWidth / 600, 15 * canvasWidth / 600, 15 * canvasWidth / 600);
+          
+          fill(0);
+          ellipse(this.x + 2 * canvasWidth / 600, this.y - 27 * canvasWidth / 600, 4 * canvasWidth / 600, 4 * canvasWidth / 600);
+          
+          fill(255, 165, 0);
+          triangle(
+            this.x + 5 * canvasWidth / 600, this.y - 25 * canvasWidth / 600,
+            this.x + 15 * canvasWidth / 600, this.y - 23 * canvasWidth / 600,
+            this.x + 5 * canvasWidth / 600, this.y - 21 * canvasWidth / 600
+          );
+        }
+        
+        flap() {
+          this.velocity = this.lift;
+          this.wingAngle = PI / 4;
+        }
+      }
+
+      class Obstacle {
+        constructor() {
+          this.width = 60 * canvasWidth / 600;
+          this.x = canvasWidth;
+          let baseSpacing = 156 * canvasWidth / 600;
+          let difficultyLevel = Math.floor(obstaclesPassed / 10);
+          this.spacing = Math.max(45 * canvasWidth / 600, baseSpacing - difficultyLevel * 10 * canvasWidth / 600);
+          let minTop = 100 * canvasWidth / 600;
+          let maxTop = canvasHeight - this.spacing - 100 * canvasWidth / 600;
+          this.top = random(minTop, maxTop > minTop ? maxTop : minTop);
+          this.speed = (1.5 + difficultyLevel * 0.3) * canvasWidth / 600;
+          this.passed = false;
+        }
+        
+        update() {
+          this.x -= this.speed;
+        }
+        
+        show() {
+          for (let y = 15 * canvasWidth / 600; y < this.top; y += 60 * canvasWidth / 600) {
+            drawBat(this.x + 15 * canvasWidth / 600, y);
+            drawBat(this.x + 45 * canvasWidth / 600, y);
+          }
+          for (let y = canvasHeight - 30 * canvasWidth / 600 - 15 * canvasWidth / 600; y > this.top + this.spacing; y -= 60 * canvasWidth / 600) {
+            drawBat(this.x + 15 * canvasWidth / 600, y);
+            drawBat(this.x + 45 * canvasWidth / 600, y);
+          }
+        }
+        
+        hits(goose) {
+          for (let y = 15 * canvasWidth / 600; y < this.top; y += 60 * canvasWidth / 600) {
+            if (rectCircleCollide(this.x + 15 * canvasWidth / 600 - 5 * canvasWidth / 600, y - 20 * canvasWidth / 600, 10 * canvasWidth / 600, 40 * canvasWidth / 600, goose.x, goose.y, goose.size / 2) ||
+                rectCircleCollide(this.x + 45 * canvasWidth / 600 - 5 * canvasWidth / 600, y - 20 * canvasWidth / 600, 10 * canvasWidth / 600, 40 * canvasWidth / 600, goose.x, goose.y, goose.size / 2)) {
+              return true;
+            }
+          }
+          for (let y = canvasHeight - 30 * canvasWidth / 600 - 15 * canvasWidth / 600; y > this.top + this.spacing; y -= 60 * canvasWidth / 600) {
+            if (rectCircleCollide(this.x + 15 * canvasWidth / 600 - 5 * canvasWidth / 600, y - 20 * canvasWidth / 600, 10 * canvasWidth / 600, 40 * canvasWidth / 600, goose.x, goose.y, goose.size / 2) ||
+                rectCircleCollide(this.x + 45 * canvasWidth / 600 - 5 * canvasWidth / 600, y - 20 * canvasWidth / 600, 10 * canvasWidth / 600, 40 * canvasWidth / 600, goose.x, goose.y, goose.size / 2)) {
+              return true;
+            }
+          }
+          return false;
+        }
+      }
+
+      function drawBat(x, y) {
+        fill(139, 69, 19);
+        rect(x - 5 * canvasWidth / 600, y - 20 * canvasWidth / 600, 10 * canvasWidth / 600, 30 * canvasWidth / 600);
+        fill(169, 169, 169);
+        rect(x - 3 * canvasWidth / 600, y + 10 * canvasWidth / 600, 6 * canvasWidth / 600, 10 * canvasWidth / 600);
+      }
+
+      function rectCircleCollide(rectX, rectY, rectWidth, rectHeight, circleX, circleY, circleRadius) {
+        let closestX = Math.max(rectX, Math.min(circleX, rectX + rectWidth));
+        let closestY = Math.max(rectY, Math.min(circleY, rectY + rectHeight));
+        let distanceX = circleX - closestX;
+        let distanceY = circleY - closestY;
+        return (distanceX * distanceX + distanceY * distanceY) < (circleRadius * circleRadius);
+      }
+
+      function loadHighScores() {
+        let scores = localStorage.getItem('highScores');
+        if (scores) {
+          try {
+            return JSON.parse(scores);
+          } catch (e) {
+            console.error('Error parsing high scores:', e);
+            return [];
+          }
+        }
+        return [];
+      }
+
+      function saveHighScores(scores) {
+        try {
+          localStorage.setItem('highScores', JSON.stringify(scores));
+          console.log('High scores saved:', scores);
+        } catch (e) {
+          console.error('Error saving high scores:', e);
+        }
+      }
+
+      function isHighScore(score) {
+        let highScores = loadHighScores();
+        if (highScores.length === 0 || highScores.length < 5) {
+          return true;
+        }
+        let minScore = Math.min(...highScores.map(s => s.score));
+        return score >= minScore;
+      }
+
+      function submitName() {
+        let name = nameInput.value().trim();
+        console.log('Submitting name:', name, 'with score:', score);
+        if (name) {
+          let highScores = loadHighScores();
+          highScores.push({name: name, score: score});
+          highScores.sort((a, b) => b.score - a.score);
+          if (highScores.length > 5) {
+            highScores = highScores.slice(0, 5);
+          }
+          saveHighScores(highScores);
+          nameInput.remove();
+          submitButton.remove();
+          nameInput = null;
+          submitButton = null;
+          canSubmitHighScore = false;
+          goose = new Goose();
+          obstacles = [];
+          score = 0;
+          obstaclesPassed = 0;
+          gameState = 'start';
+          console.log('Game state reset to start');
+        } else {
+          console.log('No name entered, submission ignored');
+        }
+      }
+
+      function displayHighScores(x, y) {
+        let highScores = loadHighScores();
+        textSize(16 * canvasWidth / 600);
+        textAlign(LEFT);
+        fill(0);
+        text('High Scores:', x, y);
+        for (let i = 0; i < highScores.length; i++) {
+          text(`${i + 1}. ${highScores[i].name}: ${highScores[i].score}`, x, y + 20 * canvasWidth / 600 * (i + 1));
+        }
+      }
+
+      document.getElementById('playButton').addEventListener('click', () => {
+        document.getElementById('landingPage').style.display = 'none';
+        document.getElementById('gameCanvas').style.display = 'flex';
+        gameState = 'playing';
+        console.log('Play button clicked, gameState set to playing');
+      });
+    </script>
+  </div>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'95f5bc596ca5e602',t:'MTc1MjU0NTU1NS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'95f5c3ec4f9207cc',t:'MTc1MjU0NTg2NS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'95f5cae64a7b68f3',t:'MTc1MjU0NjE1MS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'95f5dc9effe87ff4',t:'MTc1MjU0Njg3Ny4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'95f5e8d1bfae8238',t:'MTc1MjU0NzM3Ni4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'95f5efaa19edc978',t:'MTc1MjU0NzY1Ny4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'95f600319883c99c',t:'MTc1MjU0ODMzNC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
